@@ -1,0 +1,12 @@
+[
+    {
+        "group": "csp-endpoint",
+        "max_age": 86400,
+        "endpoints": [
+            {
+                "url": "https://report.example.com/csp"
+            }
+        ],
+        "include_subdomains": true
+    }
+]

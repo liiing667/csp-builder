@@ -141,6 +141,10 @@ class CSPBuilder
      */
     public function compile(): string
     {
+        if (!$this->needsCompile) {
+            return $this->compiled;
+        }
+
         $ruleKeys = array_keys($this->policies);
         if (in_array('report-only', $ruleKeys)) {
             $this->reportOnly = !!$this->policies['report-only'];
@@ -196,24 +200,27 @@ class CSPBuilder
      */
     public function compileReportEndpoints(): string
     {
-        if (!empty($this->reportEndpoints) && $this->needsCompileEndpoints) {
+        if ($this->needsCompileEndpoints) {
+            $this->compiledEndpoints = '';
             // If it's a string, it's probably something like `report-to: key=endpoint
             // Do nothing
             if (!is_array($this->reportEndpoints)) {
                 throw new TypeError('Report endpoints is not an array');
             }
 
-            $jsonValidator = new Validator();
-            $reportTo = [];
-            $schema = file_get_contents(__DIR__ . '/../schema/reportto.json');
-            foreach ($this->reportEndpoints as $reportEndpoint) {
-                $reportEndpointAsJSON = \Opis\JsonSchema\Helper::toJSON($reportEndpoint);
-                $isValid = $jsonValidator->validate($reportEndpointAsJSON, $schema);
-                if ($isValid->isValid()) {
-                    $reportTo[] = json_encode($reportEndpointAsJSON);
+            if (!empty($this->reportEndpoints)) {
+                $jsonValidator = new Validator();
+                $reportTo = [];
+                $schema = file_get_contents(__DIR__ . '/../schema/reportto.json');
+                foreach ($this->reportEndpoints as $reportEndpoint) {
+                    $reportEndpointAsJSON = \Opis\JsonSchema\Helper::toJSON($reportEndpoint);
+                    $isValid = $jsonValidator->validate($reportEndpointAsJSON, $schema);
+                    if ($isValid->isValid()) {
+                        $reportTo[] = json_encode($reportEndpointAsJSON);
+                    }
                 }
+                $this->compiledEndpoints = rtrim(implode(',', $reportTo));
             }
-            $this->compiledEndpoints = rtrim(implode(',', $reportTo));
             $this->needsCompileEndpoints = false;
         }
         return $this->compiledEndpoints;
@@ -593,6 +600,7 @@ class CSPBuilder
             $this->policies[$directive]['hashes'] []= [
                 $algorithm => Base64::encode($digest)
             ];
+            $this->needsCompile = true;
         }
         return $this;
     }
@@ -649,6 +657,7 @@ class CSPBuilder
             $nonce = Base64::encode(random_bytes(18));
         }
         $this->policies[$directive]['nonces'] []= $nonce;
+        $this->needsCompile = true;
         return $nonce;
     }
 
@@ -670,6 +679,7 @@ class CSPBuilder
             $this->policies[$directive]['hashes'] []= [
                 $algorithm => $hash
             ];
+            $this->needsCompile = true;
         }
         return $this;
     }
@@ -701,6 +711,8 @@ class CSPBuilder
     ): bool {
         if ($this->needsCompile) {
             $this->compile();
+        }
+        if ($this->needsCompileEndpoints) {
             $this->compileReportEndpoints();
         }
 
@@ -788,6 +800,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['unsafe-eval'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -805,6 +818,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['wasm-unsafe-eval'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -822,6 +836,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['unsafe-inline'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -839,6 +854,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['unsafe-hashed-attributes'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -856,6 +872,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['blob'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -873,6 +890,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['data'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -890,6 +908,7 @@ class CSPBuilder
     public function setDirective(string $key, $value = []): self
     {
         $this->policies[$key] = $value;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -906,6 +925,7 @@ class CSPBuilder
     public function removeDirective(string $key): self
     {
         unset($this->policies[$key]);
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -933,6 +953,7 @@ class CSPBuilder
                 unset($this->reportEndpoints[$idx]);
                 // Reset the array keys
                 $this->reportEndpoints = array_values($this->reportEndpoints);
+                $this->needsCompileEndpoints = true;
                 break;
             }
         }
@@ -951,6 +972,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['filesystem'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -968,6 +990,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['mediastream'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -985,6 +1008,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['https'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -1002,6 +1026,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['self'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -1045,6 +1070,7 @@ class CSPBuilder
             throw new Exception('Directive ' . $directive . ' does not exist');
         }
         $this->policies[$directive]['unsafe-hashes'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -1073,6 +1099,7 @@ class CSPBuilder
     public function setStrictDynamic(string $directive = '', bool $allow = false): self
     {
         $this->policies[$directive]['strict-dynamic'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -1088,6 +1115,7 @@ class CSPBuilder
     public function setReportSample(string $directive = '', bool $allow = false): self
     {
         $this->policies[$directive]['report-sample'] = $allow;
+        $this->needsCompile = true;
         return $this;
     }
 
@@ -1101,6 +1129,7 @@ class CSPBuilder
     public function setReportUri(string $url = ''): self
     {
         $this->policies['report-uri'] = $url;
+        $this->needsCompile = true;
         return $this;
     }
     
@@ -1113,6 +1142,7 @@ class CSPBuilder
     public function setReportTo($policy = ''): self
     {
         $this->policies['report-to'] = $policy;
+        $this->needsCompile = true;
         return $this;
     }
 
